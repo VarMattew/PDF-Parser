@@ -8,7 +8,7 @@ from openpyxl.styles import Font, Alignment
 import os
 import time
 
-data_list = [['No.', 'USt-ID-Nr.', 'ATTENTION', 'Versendet von']]
+data_list = [['Date', 'No.', 'USt-ID-Nr.', 'ATTENTION', 'Versendet von']]
 
 def on_futtatas():
     mappa = path_var.get()
@@ -58,9 +58,12 @@ def on_futtatas():
             reader = PdfReader(f'{mappa}/{file}')
 
             try:
-                Nummer = ' '.join(reader.pages[0].extract_text().split()).split('Datum ')[1].split(' ')[0].strip()
+                Nummers = ' '.join(reader.pages[0].extract_text().split()).split('Datum ')[1].split('Bei Zahlung')[0].split()
+                Nummer = Nummers[0].strip()
+                Date = Nummers[2].strip()
             except IndexError:
                 Nummer = 'ERROR! Nummer Not Found'
+                Date = 'ERROR! Date Not Found'
             
             try:
                 USt_ID_Nr = ' '.join(reader.pages[0].extract_text().split()).split('USt-ID-Nr.:')[1].split('Commerzbank')[0].strip()
@@ -77,7 +80,7 @@ def on_futtatas():
             except IndexError:
                 Versendet_von = 'N/A'
 
-            data_list.append([Nummer, USt_ID_Nr, Attention, Versendet_von])
+            data_list.append([Date, Nummer, USt_ID_Nr, Attention, Versendet_von])
 
             
             szazalek = (i + 1) / osszes_fajl 
