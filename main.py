@@ -90,8 +90,8 @@ def on_futtatas():
             
             root.update()
 
-            lbl_status.configure(text="Kész! Mentés folyamatban...")
-            root.update()
+        lbl_status.configure(text="Kész! Mentés folyamatban...")
+        root.update()
 
         if combo.get() == 'csv':
             with open(f'{mezo.get()}.csv', mode="w", newline="", encoding="utf-8") as f:
