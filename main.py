@@ -7,120 +7,133 @@ from  openpyxl import Workbook
 from openpyxl.styles import Font, Alignment
 import os
 import time
+import os
+import csv
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from pypdf import PdfReader # Feltételezem, hogy pypdf-et használsz
+import customtkinter as ctk
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment
 
-data_list = [['Date', 'No.', 'USt-ID-Nr.', 'ATTENTION', 'Versendet von']]
+def egy_fajl_feldolgozasa(file_path):
+    filename = os.path.basename(file_path)
+    try:
+        reader = PdfReader(file_path)
+        first_page = reader.pages[0].extract_text()
+        
+        last_page_text = reader.pages[-1].extract_text() if len(reader.pages) > 0 else ""
+
+        try:
+            Nummers_raw = ' '.join(first_page.split()).split('Datum ')[1].split('Bei Zahlung')[0].split()
+            Nummer = Nummers_raw[0].strip()
+            Date = Nummers_raw[2].strip()
+        except Exception:
+            Nummer = 'ERROR! Nummer Not Found'
+            Date = 'ERROR! Date Not Found'
+        
+        try:
+            USt_ID_Nr = ' '.join(first_page.split()).split('USt-ID-Nr.:')[1].split('Commerzbank')[0].strip()
+        except Exception:
+            USt_ID_Nr = 'N/A'
+
+        try:
+            Attention = ' '.join(last_page_text.split()).split('ATTENTION:VAT')[1].split('Ursprungsland')[0].strip()
+        except Exception:
+            Attention = 'N/A'
+
+        try:
+            Versendet_von = ' '.join(first_page.split()).split('Versendet von:')[1].split('LS-Nr')[0].strip()
+        except Exception:
+            Versendet_von = 'N/A'
+
+        return [Date, Nummer, USt_ID_Nr, Attention, Versendet_von]
+
+    except Exception as e:
+        return [f"ERROR ({filename})", "ERROR", "ERROR", "ERROR", str(e)]
+
 
 def on_futtatas():
     mappa = path_var.get()
     
     try:
-        pdf_fajlok = [f for f in os.listdir(mappa) if f.lower().endswith(('.pdf', '.PDF'))]
+        pdf_files = [f for f in os.listdir(mappa) if f.lower().endswith('.pdf')]
     except FileNotFoundError:
         print("Hiba: A mappa nem található.")
         return
 
-    osszes_fajl = len(pdf_fajlok)
-
+    osszes_fajl = len(pdf_files)
     if osszes_fajl == 0:
         print("Nem található PDF fájl a mappában!")
         return
 
-    progress_window = ctk.CTkToplevel(root)
-    progress_window.title("Feldolgozás")
-    progress_window.geometry("300x150")
-    progress_window.resizable(False, False)
-    progress_window.attributes("-topmost", True)
+    full_paths = [os.path.join(mappa, f) for f in pdf_files]
 
+    # --- GUI Setup ---
+    progress_window = ctk.CTkToplevel(root)
+    progress_window.title("Feldolgozás...")
+    progress_window.geometry("300x150")
+    
     x = root.winfo_x() + (root.winfo_width() // 2) - 150
     y = root.winfo_y() + (root.winfo_height() // 2) - 75
     progress_window.geometry(f"+{x}+{y}")
+    progress_window.transient(root)
+    progress_window.grab_set()
 
-    lbl_status = ctk.CTkLabel(progress_window, text=f"Talált fájlok: {osszes_fajl} db", 
-                              font=("Roboto", 13))
+    lbl_status = ctk.CTkLabel(progress_window, text=f"Indítás: {osszes_fajl} fájl...", font=("Roboto", 13))
     lbl_status.pack(pady=(25, 10))
 
-    progress_bar = ctk.CTkProgressBar(progress_window, width=220, height=12)
+    progress_bar = ctk.CTkProgressBar(progress_window, width=220)
     progress_bar.set(0)
     progress_bar.pack(pady=5)
-    progress_bar.configure(progress_color="gray80") 
-    
-    progress_window.grab_set()
     root.update()
 
+    final_data = [['Date', 'No.', 'USt-ID-Nr.', 'ATTENTION', 'Versendet von']]
+
+    # --- PÁRHUZAMOSÍTÁS ---
     try:
-        for i, file in enumerate(os.listdir(mappa)):
-            print(file)
-
-            if not (file.endswith('.pdf') or file.endswith('.PDF')):
-                continue
-
-            print(f'Processing file: {mappa}/{file}')
-            reader = PdfReader(f'{mappa}/{file}')
-
-            try:
-                Nummers = ' '.join(reader.pages[0].extract_text().split()).split('Datum ')[1].split('Bei Zahlung')[0].split()
-                Nummer = Nummers[0].strip()
-                Date = Nummers[2].strip()
-            except IndexError:
-                Nummer = 'ERROR! Nummer Not Found'
-                Date = 'ERROR! Date Not Found'
+        with ProcessPoolExecutor(max_workers=os.cpu_count()) as executor:
+            # Ez egy szótárt hoz létre: {FutureObjektum: fájlnév}
+            future_to_file = {executor.submit(egy_fajl_feldolgozasa, path): path for path in full_paths}
             
-            try:
-                USt_ID_Nr = ' '.join(reader.pages[0].extract_text().split()).split('USt-ID-Nr.:')[1].split('Commerzbank')[0].strip()
-            except IndexError:
-                USt_ID_Nr = 'N/A'
-
-            try:
-                Attention = ' '.join(reader.pages[-1].extract_text().split()).split('ATTENTION:VAT')[1].split('Ursprungsland')[0].strip()
-            except IndexError:
-                Attention = 'N/A'
-
-            try:
-                Versendet_von = ' '.join(reader.pages[0].extract_text().split()).split('Versendet von:')[1].split('LS-Nr')[0].strip()
-            except IndexError:
-                Versendet_von = 'N/A'
-
-            data_list.append([Date, Nummer, USt_ID_Nr, Attention, Versendet_von])
-
+            completed_count = 0
             
-            szazalek = (i + 1) / osszes_fajl 
-            
-            progress_bar.set(szazalek)
-            lbl_status.configure(text=f"Feldolgozva: {i + 1} / {osszes_fajl} ({file})")
-            
-            root.update()
+            for future in as_completed(future_to_file):
+                result_row = future.result() 
+                final_data.append(result_row)
+                
+                completed_count += 1
+                szazalek = completed_count / osszes_fajl
+                progress_bar.set(szazalek)
+                lbl_status.configure(text=f"Kész: {completed_count} / {osszes_fajl}")
+                root.update()
 
-        lbl_status.configure(text="Kész! Mentés folyamatban...")
+        # --- Mentés ---
+        lbl_status.configure(text="Mentés fájlba...")
         root.update()
 
         if combo.get() == 'csv':
             with open(f'{mezo.get()}.csv', mode="w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f, delimiter=",")
-                writer.writerows(data_list)
+                writer.writerows(final_data)
         else:
             wb = Workbook()
             ws = wb.active
-
-            for sor in data_list:
+            for sor in final_data:
                 ws.append(sor)
-
+            
+            # Formázás
             for cell in ws[1]:
                 cell.font = Font(bold=True, size=12)
                 cell.alignment = Alignment(horizontal='center', vertical='center')
-                
             ws.freeze_panes = "A2"
-            
             wb.save(f'{mezo.get()}.xlsx')
-        
 
     except Exception as e:
-        print(f"Hiba történt: {e}")
+        print(f"Kritikus hiba: {e}")
         lbl_status.configure(text="Hiba történt!")
-
     finally:
         progress_window.grab_release()
         progress_window.destroy()
-        root.grab_release()
         root.destroy()
 
 
