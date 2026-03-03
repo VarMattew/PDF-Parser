@@ -1,3 +1,4 @@
+import multiprocessing
 from pypdf import PdfReader
 import customtkinter as ctk
 from tkinter import filedialog
@@ -10,7 +11,7 @@ import time
 import os
 import csv
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from pypdf import PdfReader # Feltételezem, hogy pypdf-et használsz
+from pypdf import PdfReader
 import customtkinter as ctk
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment
@@ -141,9 +142,13 @@ ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("dark-blue")
 
 if __name__ == "__main__":
+
+    multiprocessing.freeze_support()
+
     root = ctk.CTk()
     root.geometry("360x400") 
     root.title("PDF Adat Kinyerő")
+    root.resizable(False, False)
 
     my_font_head = ("Roboto", 14)
     my_font_btn = ("Roboto", 13)
